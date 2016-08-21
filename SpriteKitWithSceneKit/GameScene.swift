@@ -13,45 +13,36 @@ import GameplayKit
 class GameScene: SKScene {
     
     var gameNode : SK3DNode = SK3DNode(viewportSize: CGSize(width: 150, height: 150.0))
+    let enemyTeapotSM = GKStateMachine(states: [Hunting(), Targeting(), Firing(), Reloading(), Destroyed()])
+    let enemyTeapotAgent = GKAgent2D()
+    
+    let etWanderGoal = GKGoal(toWander: 30)
+    let etReachSpeed = GKGoal(toReachTargetSpeed: 20.0)
+    
+    private var lastUpdateTime : TimeInterval = 0
+    
+    override func sceneDidLoad() {
+        self.lastUpdateTime = 0
+    }
     
     override func didMove(to view: SKView) {
+        let teapotScene = SCNScene(named: "teapot.scn")
+        let teapotNode = SK3DNode(viewportSize: CGSize(width: 200.0, height: 200.0))
+        teapotNode.name = "enemy teapot"
+        teapotNode.position = CGPoint(x: self.frame.maxX - 150, y: self.frame.maxY - 150)
+        teapotNode.scnScene = teapotScene
         
-        if true {
-            let newScene = SCNScene()
-            let geom = SCNBox(width: 10.0, height: 10.0, length: 10.0, chamferRadius: 0.5)
-            let geomNode = SCNNode(geometry: geom)
-            newScene.rootNode.addChildNode(geomNode)
-            
-            let camNode = SCNNode()
-            camNode.camera = SCNCamera()
-            camNode.position = SCNVector3Make(0.0, 10.0, 20.0)
-            camNode.rotation = SCNVector4Make(1.0, 0.0, 0.0, -atan2f(10.0, 20.0))
-            newScene.rootNode.addChildNode(camNode)
-            
-            let lightBlue = UIColor(colorLiteralRed: 0.0, green: 0.5, blue: 1.0, alpha: 1.0)
-            let light = SCNLight()
-            light.type = .directional
-            light.color = lightBlue
-            let lightNode = SCNNode()
-            lightNode.light = light
-            camNode.addChildNode(lightNode)
+        // rotation bug workaround
+        teapotNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: 0, duration: 0.5)))
+        
+        self.addChild(teapotNode)
+        
+        enemyTeapotSM.enter(Hunting.self)
 
-            gameNode.position = CGPoint(x: 0.0, y: 250.0)
-            gameNode.scnScene = newScene
-            self.addChild(gameNode)
-            geomNode.runAction(SCNAction.repeatForever(SCNAction.rotateBy(x: 0, y: 0.01, z: 0, duration: 1.0 / 60.0)))
-            
-            let boxScene = SCNScene(named: "teapot.scn")
-            let teapotNode = SK3DNode(viewportSize: CGSize(width: 200.0, height: 200.0))
-            teapotNode.name = "teapot"
-            teapotNode.position = gameNode.position
-            teapotNode.scnScene = boxScene
-            
-            // rotation bug workaround
-            teapotNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: 0, duration: 0.5)))
-            
-            self.addChild(teapotNode)
-        }
+        enemyTeapotAgent.behavior = GKBehavior(goals: [etWanderGoal], andWeights: [5])
+        enemyTeapotAgent.position = vector2(Float(teapotNode.position.x), Float(teapotNode.position.y))
+        enemyTeapotAgent.maxAcceleration = 10
+        enemyTeapotAgent.maxSpeed = 30
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -62,6 +53,20 @@ class GameScene: SKScene {
     }
     
     override func update(_ currentTime: TimeInterval) {
-        // Called before each frame is rendered
+
+        // Initialize _lastUpdateTime if it has not already been
+        if (self.lastUpdateTime == 0) {
+            self.lastUpdateTime = currentTime
+        }
+        // Calculate time since last update
+        let dt = currentTime - self.lastUpdateTime
+        self.lastUpdateTime = currentTime
+        
+        enemyTeapotSM.update(deltaTime: dt)
+        enemyTeapotAgent.update(deltaTime: dt)
+        
+        if let enemyTeapot = self.childNode(withName: "enemy teapot") {
+            enemyTeapot.position = CGPoint(x: CGFloat(enemyTeapotAgent.position.x), y: CGFloat(enemyTeapotAgent.position.y))
+        }
     }
 }
