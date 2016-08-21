@@ -11,6 +11,7 @@ let smokeEmitter = SKEmitterNode(fileNamed: "SmokeParticles.sks")
 let randomDistribution = GKRandomDistribution(lowestValue: 0, highestValue: 200)
 
 let shootSound = SKAction.playSoundFileNamed("pew.m4a", waitForCompletion: false)
+let explosionSound = SKAction.playSoundFileNamed("explosion.m4a", waitForCompletion: false)
 
 class GameScene: SKScene {
     
@@ -46,7 +47,7 @@ class GameScene: SKScene {
         enemyTeapotSM.enter(Hunting.self)
 
         
-        setupPlayer()
+        setupPlayer(location: CGPoint(x: self.frame.midX, y: 150))
         
 //        let areaConstraint = SKConstraint.distance(SKRange(upperLimit: 600), to: CGPoint(x: CGFloat(self.frame.midX), y: CGFloat(self.frame.midY)))
 //        teapotNode.constraints = [ areaConstraint ]
@@ -61,14 +62,14 @@ class GameScene: SKScene {
         
     }
     
-    func setupPlayer() {
+    func setupPlayer(location: CGPoint) {
         let playerNode = SK3DNode(viewportSize: CGSize(width: 100.0, height: 100.0))
 
         let player = SCNScene(named: "bluebox.scn")
 
         playerNode.name = "player"
         //playerNode.position = CGPoint(x: self.frame.midX, y: 0)
-        playerNode.position = CGPoint(x: self.frame.midX, y: 150)
+        playerNode.position = location
         playerAgent.position = vector_float2(Float(playerNode.position.x), Float(playerNode.position.y))
         playerNode.scnScene = player
         self.addChild(playerNode)
@@ -81,7 +82,7 @@ class GameScene: SKScene {
                 playerNode.run(SKAction.move(to: loc, duration: 1))
                 playerAgent.position = vector_float2( Float(loc.x), Float(loc.y))
             } else {
-                setupPlayer();
+                setupPlayer(location: loc);
             }
         }
     }
@@ -102,10 +103,14 @@ class GameScene: SKScene {
         if let enemyTeapot = self.childNode(withName: "enemy teapot") {
             enemyTeapot.position = CGPoint(x: CGFloat(enemyTeapotAgent.position.x), y: CGFloat(enemyTeapotAgent.position.y))
 
+            if enemyTeapotAgent.position.x <= 10 || enemyTeapotAgent.position.x >= Float(self.size.width) - 10 || enemyTeapotAgent.position.y <= 10 || enemyTeapotAgent.position.y >= Float(self.size.height) - 10 {
+
+                targetPlayer()
+                return
+            }
+
             if (distance(enemyTeapotAgent.position, playerAgent.position) < 500) {
-                enemyTeapotSM.enter(Targeting.self)
-                enemyTeapotAgent.behavior?.setWeight(0, for: etWanderGoal)
-                enemyTeapotAgent.behavior?.setWeight(10, for: etSeekGoal)
+                targetPlayer()
                 
                 if let _ = self.childNode(withName: "torpedo") {
                     
@@ -128,9 +133,7 @@ class GameScene: SKScene {
                 }
                 
             } else {
-                enemyTeapotSM.enter(Hunting.self)
-                enemyTeapotAgent.behavior?.setWeight(0, for: etSeekGoal)
-                enemyTeapotAgent.behavior?.setWeight(10, for: etWanderGoal)
+                huntPlayer()
             }
         }
         
@@ -153,6 +156,7 @@ class GameScene: SKScene {
                         puff.particleBirthRate = 0
                         }, SKAction.wait(forDuration: 1), SKAction.removeFromParent()]))
                     score = score - 1
+                    run(explosionSound)
                 }
             }
         }
@@ -177,4 +181,30 @@ class GameScene: SKScene {
             pu.position = CGPoint(x: CGFloat(randValX) * self.frame.maxX, y: CGFloat(randValY) * self.frame.maxY)
         }
     }
+}
+
+// MARK: - Helpers
+
+extension GameScene {
+
+    func targetPlayer() {
+        if enemyTeapotSM.currentState is Targeting {
+            return
+        }
+        print("Switching to Targeting Player (seeking)")
+        enemyTeapotSM.enter(Targeting.self)
+        enemyTeapotAgent.behavior?.setWeight(0, for: etWanderGoal)
+        enemyTeapotAgent.behavior?.setWeight(10, for: etSeekGoal)
+    }
+
+    func huntPlayer() {
+        if enemyTeapotSM.currentState is Hunting {
+            return
+        }
+        print("Switching to Hunting player (wandering)")
+        enemyTeapotSM.enter(Hunting.self)
+        enemyTeapotAgent.behavior?.setWeight(0, for: etSeekGoal)
+        enemyTeapotAgent.behavior?.setWeight(10, for: etWanderGoal)
+    }
+
 }
