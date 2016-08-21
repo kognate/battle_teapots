@@ -2,24 +2,24 @@
 //  GameScene.swift
 //  SpriteKitWithSceneKit
 //
-//  Created by Jonathan Blocksom on 8/20/16.
-//  Copyright © 2016 GollyGee Software, Inc. All rights reserved.
-//
-
 import SpriteKit
 import SceneKit
 import GameplayKit
 
 let smokeEmitter = SKEmitterNode(fileNamed: "SmokeParticles.sks")
 
+let randomDistribution = GKRandomDistribution(lowestValue: 0, highestValue: 200)
+
+let shootSound = SKAction.playSoundFileNamed("pew.m4a", waitForCompletion: false)
+
 class GameScene: SKScene {
     
     var gameNode : SK3DNode = SK3DNode(viewportSize: CGSize(width: 150, height: 150.0))
-    let playerNode = SK3DNode(viewportSize: CGSize(width: 100.0, height: 100.0))
     
     let enemyTeapotSM = GKStateMachine(states: [Hunting(), Targeting()])
     let enemyTeapotAgent = GKAgent2D()
     let playerAgent = GKAgent2D()
+    var score = 0
     
     let etWanderGoal = GKGoal(toWander: 30)
     var etSeekGoal = GKGoal()
@@ -46,14 +46,10 @@ class GameScene: SKScene {
         enemyTeapotSM.enter(Hunting.self)
 
         
-        let player = SCNScene(named: "bluebox.scn")
-
-        playerNode.name = "player"
-        //playerNode.position = CGPoint(x: self.frame.midX, y: 0)
-        playerNode.position = CGPoint(x: self.frame.midX, y: 150)
-        playerAgent.position = vector_float2(Float(playerNode.position.x), Float(playerNode.position.y))
-        playerNode.scnScene = player
-        self.addChild(playerNode)
+        setupPlayer()
+        
+//        let areaConstraint = SKConstraint.distance(SKRange(upperLimit: 600), to: CGPoint(x: CGFloat(self.frame.midX), y: CGFloat(self.frame.midY)))
+//        teapotNode.constraints = [ areaConstraint ]
         
         // cohere seems to be broken
         let etCohereGoal = GKGoal(toCohereWith: [playerAgent], maxDistance: 10, maxAngle: Float(M_PI))
@@ -65,11 +61,28 @@ class GameScene: SKScene {
         
     }
     
+    func setupPlayer() {
+        let playerNode = SK3DNode(viewportSize: CGSize(width: 100.0, height: 100.0))
+
+        let player = SCNScene(named: "bluebox.scn")
+
+        playerNode.name = "player"
+        //playerNode.position = CGPoint(x: self.frame.midX, y: 0)
+        playerNode.position = CGPoint(x: self.frame.midX, y: 150)
+        playerAgent.position = vector_float2(Float(playerNode.position.x), Float(playerNode.position.y))
+        playerNode.scnScene = player
+        self.addChild(playerNode)
+    }
+    
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         if let firstTouch = touches.first {
             let loc = firstTouch.location(in: self)
-            playerNode.run(SKAction.move(to: loc, duration: 1))
-            playerAgent.position = vector_float2( Float(loc.x), Float(loc.y))
+            if let playerNode = self.childNode(withName: "player") {
+                playerNode.run(SKAction.move(to: loc, duration: 1))
+                playerAgent.position = vector_float2( Float(loc.x), Float(loc.y))
+            } else {
+                setupPlayer();
+            }
         }
     }
     
@@ -93,6 +106,27 @@ class GameScene: SKScene {
                 enemyTeapotSM.enter(Targeting.self)
                 enemyTeapotAgent.behavior?.setWeight(0, for: etWanderGoal)
                 enemyTeapotAgent.behavior?.setWeight(10, for: etSeekGoal)
+                
+                if let _ = self.childNode(withName: "torpedo") {
+                    
+                } else {
+                    let ift = SKSpriteNode(imageNamed: "spark.png")
+                    ift.name = "torpedo"
+                    ift.position = enemyTeapot.position
+                    self.addChild(ift)
+                    var x_1 = Float(randomDistribution.nextInt() - 100) / 100.0
+                    var x_2 = Float(randomDistribution.nextInt() - 100) / 100.0
+                    
+                    while (x_1 * x_1) + (x_2 * x_2) >= 1 {
+                       x_1 = Float(randomDistribution.nextInt() - 100) / 100.0
+                       x_2 = Float(randomDistribution.nextInt() - 100) / 100.0
+                    }
+                    
+                    let x = (pow(x_1,2) - pow(x_2,2)) / (pow(x_1,2) + pow(x_2,2))
+                    let y = (2 * x_1 * x_2) / (pow(x_1,2) + pow(x_2,2))
+                    ift.run(SKAction.sequence([shootSound, SKAction.move(to: CGPoint(x: CGFloat(x * 600.0), y: CGFloat(y * 600)), duration: 1),SKAction.removeFromParent()]))
+                }
+                
             } else {
                 enemyTeapotSM.enter(Hunting.self)
                 enemyTeapotAgent.behavior?.setWeight(0, for: etSeekGoal)
@@ -110,9 +144,37 @@ class GameScene: SKScene {
                         puff.particleBirthRate = 0
                         }, SKAction.wait(forDuration: 1), SKAction.removeFromParent()]))
                     node.removeFromParent()
+                    score = score + 1
+                } else if (node.name == "torpedo" || node.name == "enemy teapot") {
+                    let puff = smokeEmitter!.copy() as! SKEmitterNode
+                    puff.position = player.position
+                    player.removeFromParent()
+                    puff.run(SKAction.sequence([SKAction.wait(forDuration: 1), SKAction.run {
+                        puff.particleBirthRate = 0
+                        }, SKAction.wait(forDuration: 1), SKAction.removeFromParent()]))
+                    score = score - 1
                 }
             }
         }
-
+        
+        if self.childNode(withName: "powerUp") == nil {
+            resetPowerUps()
+        }
+        if let scoreLabel = self.childNode(withName: "score") as? SKLabelNode {
+            scoreLabel.text = "Score: \(score)"
+        }
+    }
+    
+    func resetPowerUps() {
+        for _ in 1...5 {
+            let pu = SKSpriteNode(imageNamed: "Spaceship.png")
+            pu.size = CGSize(width: 92.0, height: 112.0)
+            pu.name = "powerUp"
+            self.addChild(pu)
+            let randValX = randomDistribution.nextUniform()
+            let randValY = randomDistribution.nextUniform()
+            pu.zRotation = CGFloat(randValX * Float(2.0 * M_PI))
+            pu.position = CGPoint(x: CGFloat(randValX) * self.frame.maxX, y: CGFloat(randValY) * self.frame.maxY)
+        }
     }
 }
