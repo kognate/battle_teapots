@@ -40,6 +40,17 @@ class GameScene: SKScene {
             gameNode.scnScene = newScene
             self.addChild(gameNode)
             geomNode.runAction(SCNAction.repeatForever(SCNAction.rotateBy(x: 0, y: 0.01, z: 0, duration: 1.0 / 60.0)))
+            
+            let boxScene = SCNScene(named: "teapot.scn")
+            let teapotNode = SK3DNode(viewportSize: CGSize(width: 200.0, height: 200.0))
+            teapotNode.name = "teapot"
+            teapotNode.position = gameNode.position
+            teapotNode.scnScene = boxScene
+            
+            // rotation bug workaround
+            teapotNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: 0, duration: 0.5)))
+            
+            self.addChild(teapotNode)
         }
     }
     
